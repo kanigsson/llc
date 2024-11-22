@@ -47,7 +47,7 @@ procedure LLC
   (frequencies : in     Count_Array;
    bit_lengths :    out Length_Array)
 is
-  subtype Index_Type is Count_Type;
+  subtype Index_Type is Count_Type range 0 .. Count_Type (2 * max_bits * (max_bits + 1) - 1);
 
   null_index : constant Index_Type := Index_Type'Last;
 
@@ -65,7 +65,7 @@ is
   end record;
 
   --  Memory pool for nodes.
-  pool : array (0 .. Index_Type (2 * max_bits * (max_bits + 1) - 1)) of Node;
+  pool : array (Index_Type) of Node;
   pool_next : Index_Type := pool'First;
 
   type Index_pair is array (Index_Type'(0) .. 1) of Index_Type;
@@ -94,7 +94,7 @@ is
   --  Finds a free location in the memory pool. Performs garbage collection if needed.
   --  If use_lists = True, used to mark in-use nodes during garbage collection.
 
-  function Get_Free_Node (use_lists : Boolean) return Index_Type is
+  function Get_Free_Node (use_lists : Boolean) return Index_Type with Side_Effects is
     node_idx : Index_Type;
   begin
     loop
@@ -128,7 +128,9 @@ is
   --  final: Whether this is the last time this function is called. If it is then it
   --  is no more needed to recursively call self.
 
-  procedure Boundary_PM (index : Index_Type; final : Boolean) is
+  procedure Boundary_PM (index : Index_Type; final : Boolean)
+    with Subprogram_Variant => (Decreasing => index)
+  is
     newchain  : Index_Type;
     oldchain  : Index_Type;
     lastcount : constant Count_Type := pool (lists (index)(1)).count;  --  Count of last chain of list.
@@ -165,9 +167,11 @@ is
   --  Initializes each list with as lookahead chains the two leaves with lowest weights.
 
   procedure Init_Lists is
-    node0 : constant Index_Type := Get_Free_Node (use_lists => False);
-    node1 : constant Index_Type := Get_Free_Node (use_lists => False);
+    node0 : Index_Type;
+    node1 : Index_Type;
   begin
+    node0 := Get_Free_Node (use_lists => False);
+    node1 := Get_Free_Node (use_lists => False);
     Init_Node (leaves (0).weight, 1, null_index, node0);
     Init_Node (leaves (1).weight, 2, null_index, node1);
     lists := (others => (node0, node1));
