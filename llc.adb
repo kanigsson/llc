@@ -75,7 +75,7 @@ is
 
   type Index_pair is array (Index_Type'(0) .. 1) of Index_Type;
   subtype List_Index_Type is Index_Type range 0 .. Index_Type (max_bits - 1);
-  lists : array (List_Index_Type) of Index_pair;
+  lists : array (List_Index_Type) of Index_pair with Relaxed_Initialization;
 
 
   num_symbols : Count_Type := 0;  --  Amount of symbols with frequency > 0.
@@ -87,7 +87,7 @@ is
   length_exceeds_length_limit       : exception;
   buggy_sorting                     : exception;
 
-  procedure Init_Node (weight : Count_Type; count : Leaves_Index_Type; tail, node_idx : Index_Type) is
+  procedure Init_Node (weight : Count_Type; count : Leaves_Index_Type; tail, node_idx : Index_Type) with Pre => True is
   begin
     pool (node_idx).weight := weight;
     pool (node_idx).count  := count;
@@ -170,7 +170,7 @@ is
 
   --  Initializes each list with as lookahead chains the two leaves with lowest weights.
 
-  procedure Init_Lists is
+  procedure Init_Lists with Pre => True is
     node0 : Index_Type;
     node1 : Index_Type;
   begin
@@ -230,8 +230,6 @@ is
     Quick_sort (a (a'First + i .. a'Last));
   end Quick_sort;
 
-  paranoid : constant Boolean := False;
-
 begin
   bit_lengths := (others => 0);
   --  Count used symbols and place them in the leaves.
@@ -254,13 +252,6 @@ begin
   end if;
   --  Sort the leaves from lightest to heaviest.
   Quick_sort (leaves (0 .. num_symbols - 1));
-  if paranoid then
-    for i in 1 .. num_symbols - 1 loop
-      if leaves (i) < leaves (i - 1) then
-        raise buggy_sorting;
-      end if;
-    end loop;
-  end if;
   Init_Lists;
   --  In the last list, 2 * num_symbols - 2 active chains need to be created. Two
   --  are already created in the initialization. Each Boundary_PM run creates one.
@@ -269,20 +260,4 @@ begin
     Boundary_PM (Index_Type (max_bits - 1), i = num_Boundary_PM_runs);
   end loop;
   Extract_Bit_Lengths (lists (Index_Type (max_bits - 1))(1));
-  if paranoid then
-    --  Done; some checks before leaving. Not checked: completeness of Huffman codes.
-    for a in Alphabet loop
-      if frequencies (a) = 0 then
-        if bit_lengths (a) > 0 then
-          raise nonzero_length_but_zero_frequency;  --  Never happened so far
-        end if;
-      else
-        if bit_lengths (a) = 0 then
-          raise zero_length_but_nonzero_frequency;  --  Happened before null_index fix
-        elsif bit_lengths (a) > max_bits then
-          raise length_exceeds_length_limit;        --  Never happened so far
-        end if;
-      end if;
-    end loop;
-  end if;
 end LLC;
