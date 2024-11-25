@@ -51,28 +51,32 @@ is
 
   null_index : constant Index_Type := Index_Type'Last;
 
-  --  Nodes forming chains.
-  type Node is record
-    weight : Count_Type;
-    count  : Count_Type;                --  Number of leaves before this chain.
-    tail   : Index_Type := null_index;  --  Previous node(s) of this chain, or null_index if none.
-    in_use : Boolean    := False;       --  Tracking for garbage collection.
-  end record;
-
   type Leaf_Node is record
     weight : Count_Type;
     symbol : Alphabet;
   end record;
+
+  type Leaf_array is array (Index_Type range <>) of Leaf_Node;
+  subtype Leaves_Index_Type is Index_Type range 0 .. frequencies'Length - 1;
+  leaves : Leaf_array (Leaves_Index_Type);
+
+  --  Nodes forming chains.
+  type Node is record
+    weight : Count_Type;
+    count  : Leaves_Index_Type;                --  Number of leaves before this chain.
+    tail   : Index_Type := null_index;  --  Previous node(s) of this chain, or null_index if none.
+    in_use : Boolean    := False;       --  Tracking for garbage collection.
+  end record;
+
 
   --  Memory pool for nodes.
   pool : array (Index_Type) of Node;
   pool_next : Index_Type := pool'First;
 
   type Index_pair is array (Index_Type'(0) .. 1) of Index_Type;
-  lists : array (0 .. Index_Type (max_bits - 1)) of Index_pair;
+  subtype List_Index_Type is Index_Type range 0 .. Index_Type (max_bits - 1);
+  lists : array (List_Index_Type) of Index_pair;
 
-  type Leaf_array is array (Index_Type range <>) of Leaf_Node;
-  leaves : Leaf_array (0 .. frequencies'Length - 1);
 
   num_symbols : Count_Type := 0;  --  Amount of symbols with frequency > 0.
   num_Boundary_PM_runs : Count_Type;
@@ -83,7 +87,7 @@ is
   length_exceeds_length_limit       : exception;
   buggy_sorting                     : exception;
 
-  procedure Init_Node (weight, count : Count_Type; tail, node_idx : Index_Type) is
+  procedure Init_Node (weight : Count_Type; count : Leaves_Index_Type; tail, node_idx : Index_Type) is
   begin
     pool (node_idx).weight := weight;
     pool (node_idx).count  := count;
@@ -128,8 +132,8 @@ is
   --  final: Whether this is the last time this function is called. If it is then it
   --  is no more needed to recursively call self.
 
-  procedure Boundary_PM (index : Index_Type; final : Boolean)
-    with Subprogram_Variant => (Decreasing => index)
+  procedure Boundary_PM (index : List_Index_Type; final : Boolean)
+    with Subprogram_Variant => (Decreases => index)
   is
     newchain  : Index_Type;
     oldchain  : Index_Type;
