@@ -201,33 +201,56 @@ is
     return a.weight < b.weight;
   end "<";
 
-  procedure Quick_sort (a : in out Leaf_array) is
+  procedure Quick_sort (a : in out Leaf_array)
+    with Pre => 0 <= A'Length and then A'Length <= Index_Type'Last
+  is
     n : constant Index_Type := a'Length;
     i, j : Index_Type;
-    p, t : Leaf_Node;
+    t : Leaf_Node;
+    middle : constant Index_Type := n / 2;
   begin
     if n < 2 then
       return;
     end if;
-    p := a (n / 2 + a'First);
-    i := 0;
-    j := n - 1;
-    loop
-      while a (i + a'First) < p loop
-        i := i + 1;
+    declare
+      p : constant Leaf_Node := a (a'first + middle);
+    begin
+      i := 0;
+      j := n - 1;
+      loop
+        pragma Loop_Invariant
+          (i in 0 .. n - 1
+           and then j in 0 .. n - 1
+           and then (for all k in 0 .. i - 1 => a (a'first + k).weight <= p.weight)
+           and then (for all k in j + 1 .. n - 1 => p.weight <= a (a'first + k).weight)
+           and then (for some k in 0 .. n - 1 => p.weight = a (a'first + k).weight));
+
+        while i < n - 1 and then  a (a'first + i).weight < p.weight loop
+          pragma Loop_Invariant
+            (i in 0 .. n - 1
+             and then (for all k in 0 .. i => a (a'first + k).weight <= p.weight)
+            );
+          i := i + 1;
+        end loop;
+        while j > 0 and then p.weight < a (a'First + j).weight loop
+          pragma Loop_Invariant
+            (j in 0 .. n - 1
+             and then (for all k in j .. n - 1 => p.weight <= a (a'first + k).weight)
+            );
+          j := j - 1;
+        end loop;
+        exit when i >= j;
+        t := a (i + a'First);
+        a (i + a'First) := a (j + a'First);
+        a (j + a'First) := t;
+        if i < n - 1 and j > 0 then
+          i := i + 1;
+          j := j - 1;
+        end if;
       end loop;
-      while p < a (j + a'First) loop
-        j := j - 1;
-      end loop;
-      exit when i >= j;
-      t := a (i + a'First);
-      a (i + a'First) := a (j + a'First);
-      a (j + a'First) := t;
-      i := i + 1;
-      j := j - 1;
-    end loop;
-    Quick_sort (a (a'First .. a'First + i - 1));
-    Quick_sort (a (a'First + i .. a'Last));
+      Quick_sort (a (a'First .. a'First + i - 1));
+      Quick_sort (a (a'First + i .. a'Last));
+    end;
   end Quick_sort;
 
 begin
