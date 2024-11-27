@@ -62,13 +62,44 @@ is
   end record;
 
   type Leaf_array is array (Index_Type range <>) of Leaf_Node;
-  subtype Leaves_Index_Type is Index_Type range 0 .. frequencies'Length - 1;
+
+  too_many_symbols_for_length_limit : exception;
+
+  function Count_Symbols_Ghost (A : Alphabet) return Index_Type with Ghost
+  is ((if frequencies (A) > 0 then 1 else 0) + 
+      (if A = Alphabet'First then 0 else Count_Symbols_Ghost (A'Pred)));
+
+  function Count_Symbols return Index_Type
+  with Post => 
+    Count_Symbols'Result = Count_Symbols_Ghost (Alphabet'Last)
+    and then Count_Symbols'Result >= 0
+    and then Count_Symbols'Result <= 2 ** max_bits
+  is
+    num_symbols : Count_Type := 0;
+  begin
+    for a in Alphabet loop
+      if frequencies (a) > 0 then
+        num_symbols := num_symbols + 1;
+      end if;
+      pragma Loop_Invariant (num_symbols <= Alphabet'Pos (a));
+    end loop;
+    --  Check special cases and error conditions.
+    if num_symbols > 2 ** max_bits then
+      raise too_many_symbols_for_length_limit;  --  Error, too few max_bits to represent symbols.
+    end if;
+    return num_symbols;
+  end Count_Symbols;
+
+  num_symbols : constant Index_Type := Count_Symbols;  --  Amount of symbols with frequency > 0.
+
+  subtype Leaves_Index_Type_Invalid is Index_Type range 0 .. num_symbols;
+  subtype Leaves_Index_Type is Leaves_Index_Type_Invalid range 0 .. Leaves_Index_Type_Invalid'Last - 1;
   leaves : Leaf_array (Leaves_Index_Type);
 
   --  Nodes forming chains.
   type Node is record
     weight : Count_Type;
-    count  : Leaves_Index_Type;                --  Number of leaves before this chain.
+    count  : Leaves_Index_Type_Invalid;                --  Number of leaves before this chain.
     tail   : Index_Type := null_index;  --  Previous node(s) of this chain, or null_index if none.
     in_use : Boolean    := False;       --  Tracking for garbage collection.
   end record;
@@ -83,16 +114,14 @@ is
   lists : array (List_Index_Type) of Index_pair;
 
 
-  num_symbols : Leaves_Index_Type := 0;  --  Amount of symbols with frequency > 0.
   num_Boundary_PM_runs : Count_Type;
 
-  too_many_symbols_for_length_limit : exception;
   zero_length_but_nonzero_frequency : exception;
   nonzero_length_but_zero_frequency : exception;
   length_exceeds_length_limit       : exception;
   buggy_sorting                     : exception;
 
-  procedure Init_Node (weight : Count_Type; count : Leaves_Index_Type; tail, node_idx : Index_Type) with Pre => True is
+  procedure Init_Node (weight : Count_Type; count : Leaves_Index_Type_Invalid; tail, node_idx : Index_Type) with Pre => True is
   begin
     pool (node_idx).weight := weight;
     pool (node_idx).count  := count;
@@ -159,7 +188,7 @@ is
   is
     newchain  : Index_Type;
     oldchain  : Index_Type;
-    lastcount : constant Leaves_Index_Type := pool (lists (index)(1)).count;  --  Count of last chain of list.
+    lastcount : constant Leaves_Index_Type_Invalid := pool (lists (index)(1)).count;  --  Count of last chain of list.
     sum : Count_Type;
   begin
     if index = 0 and lastcount >= num_symbols then
@@ -192,7 +221,7 @@ is
 
   --  Initializes each list with as lookahead chains the two leaves with lowest weights.
 
-  procedure Init_Lists with Pre => True is
+  procedure Init_Lists with Pre => num_symbols >= 2 is
     node0 : Index_Type;
     node1 : Index_Type;
   begin
@@ -207,7 +236,7 @@ is
   --  last chain of the last list contains the amount of active leaves in each list.
   --  chain: Chain to extract the bit length from (last chain from last list).
 
-  procedure Extract_Bit_Lengths (chain : Index_Type) is
+  procedure Extract_Bit_Lengths (chain : Index_Type) with Pre => num_symbols >= 2 is
     node_idx : Index_Type := chain;
   begin
     while node_idx /= null_index loop
@@ -273,16 +302,14 @@ is
 begin
   bit_lengths := (others => 0);
   --  Count used symbols and place them in the leaves.
-  for a in Alphabet loop
+
+ for a in Alphabet loop
     if frequencies (a) > 0 then
       leaves (num_symbols) := (frequencies (a), a);
       num_symbols := num_symbols + 1;
     end if;
   end loop;
-  --  Check special cases and error conditions.
-  if num_symbols > 2 ** max_bits then
-    raise too_many_symbols_for_length_limit;  --  Error, too few max_bits to represent symbols.
-  end if;
+
   if num_symbols = 0 then
     return;  --  No symbols at all. OK.
   end if;
