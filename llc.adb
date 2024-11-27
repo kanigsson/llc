@@ -47,7 +47,8 @@ procedure LLC
   (frequencies : in     Count_Array;
    bit_lengths :    out Length_Array)
 is
-  subtype Index_Type is Count_Type range 0 .. Count_Type (2 * max_bits * (max_bits + 1) - 1);
+  subtype Index_Type_Invalid is Count_Type range 0 .. Count_Type (2 * max_bits * (max_bits + 1));
+  subtype Index_Type is Index_Type_Invalid range 0 .. Index_Type_Invalid'Last - 1;
 
   null_index : constant Index_Type := Index_Type'Last;
 
@@ -66,7 +67,7 @@ is
 
   --  Memory pool for nodes.
   pool : array (Index_Type) of Node;
-  pool_next : Index_Type := pool'First;
+  pool_next : Index_Type_Invalid := pool'First;
 
   type Index_pair is array (Index_Type'(0) .. 1) of Index_Type;
   lists : array (0 .. Index_Type (max_bits - 1)) of Index_pair;

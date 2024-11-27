@@ -5,3 +5,4 @@
   declarative regions
 - add subtypes with ranges so that array accesses automatically pass
 - add a subprogram variant to a recursive subprogram
+- add subtype with invalid value in addition to `index_type`, for `get_free_node`
