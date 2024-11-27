@@ -76,7 +76,7 @@ is
 
   type Index_pair is array (Index_Type'(0) .. 1) of Index_Type;
   subtype List_Index_Type is Index_Type range 0 .. Index_Type (max_bits - 1);
-  lists : array (List_Index_Type) of Index_pair with Relaxed_Initialization;
+  lists : array (List_Index_Type) of Index_pair;
 
 
   num_symbols : Count_Type := 0;  --  Amount of symbols with frequency > 0.
@@ -99,7 +99,26 @@ is
   --  Finds a free location in the memory pool. Performs garbage collection if needed.
   --  If use_lists = True, used to mark in-use nodes during garbage collection.
 
-  function Get_Free_Node (use_lists : Boolean) return Index_Type with Side_Effects is
+  --  Copy of Get_Free_Node where we hardcode use_lists = False
+  function Init_Get_Free_Node return Index_Type with Side_Effects is
+  begin
+    loop
+      if pool_next > pool'Last then
+        --  Garbage collection.
+        for i in pool'Range loop
+          pool (i).in_use := False;
+        end loop;
+        pool_next := pool'First;
+      end if;
+      exit when not pool (pool_next).in_use;  -- Found one.
+      pool_next := pool_next + 1;
+    end loop;
+    pool_next := pool_next + 1;
+    return pool_next - 1;
+  end Init_Get_Free_Node;
+
+  --  Copy of Get_Free_Node where we hardcode use_lists = True
+  function Get_Free_Node return Index_Type with Side_Effects is
     node_idx : Index_Type;
   begin
     loop
@@ -108,15 +127,13 @@ is
         for i in pool'Range loop
           pool (i).in_use := False;
         end loop;
-        if use_lists then
-          for i in 0 .. Index_Type (max_bits * 2 - 1) loop
-            node_idx := lists (i / 2)(i mod 2);
-            while node_idx /= null_index loop
-              pool (node_idx).in_use := True;
-              node_idx := pool (node_idx).tail;
-            end loop;
+        for i in 0 .. Index_Type (max_bits * 2 - 1) loop
+          node_idx := lists (i / 2)(i mod 2);
+          while node_idx /= null_index loop
+            pool (node_idx).in_use := True;
+            node_idx := pool (node_idx).tail;
           end loop;
-        end if;
+        end loop;
         pool_next := pool'First;
       end if;
       exit when not pool (pool_next).in_use;  -- Found one.
@@ -144,7 +161,7 @@ is
     if index = 0 and lastcount >= num_symbols then
       return;
     end if;
-    newchain := Get_Free_Node (use_lists => True);
+    newchain := Get_Free_Node;
     oldchain := lists (index)(1);
     --  These are set up before the recursive calls below, so that there is a list
     --  pointing to the new node, to let the garbage collection know it's in use.
@@ -175,8 +192,8 @@ is
     node0 : Index_Type;
     node1 : Index_Type;
   begin
-    node0 := Get_Free_Node (use_lists => False);
-    node1 := Get_Free_Node (use_lists => False);
+    node0 := Init_Get_Free_Node;
+    node1 := Init_Get_Free_Node;
     Init_Node (leaves (0).weight, 1, null_index, node0);
     Init_Node (leaves (1).weight, 2, null_index, node1);
     lists := (others => (node0, node1));
