@@ -65,15 +65,34 @@ is
 
   too_many_symbols_for_length_limit : exception;
 
-  function Count_Symbols_Ghost (A : Alphabet) return Index_Type with Ghost
+  function Count_Symbols_Ghost (A : Alphabet) return Index_Type
   is ((if frequencies (A) > 0 then 1 else 0) + 
-      (if A = Alphabet'First then 0 else Count_Symbols_Ghost (A'Pred)));
+      (if A = Alphabet'First then 0 else Count_Symbols_Ghost (Alphabet'Pred (A))))
+      with Ghost, Subprogram_Variant => (Decreases => A), Post => Count_Symbols_Ghost'Result <= Alphabet'Pos (A);
+
+  procedure Lemma_Count_Order (A1, A2 : Alphabet)
+  with Pre => A1 <= A2,
+       Post => Count_Symbols_Ghost (A1) <= Count_Symbols_Ghost (A2),
+       Subprogram_Variant => (Decreases => A2);
+
+  procedure Lemma_Count_Order (A1, A2 : Alphabet) is
+  begin
+    if A1 >= Alphabet'Pred (A2) then
+       null;
+    else
+       Lemma_Count_Order (A1, Alphabet'Pred (A2));
+    end if;
+  end Lemma_Count_Order;
 
   function Count_Symbols return Index_Type
   with Post => 
-    Count_Symbols'Result = Count_Symbols_Ghost (Alphabet'Last)
-    and then Count_Symbols'Result >= 0
-    and then Count_Symbols'Result <= 2 ** max_bits
+  (declare
+     cs : Index_Type renames Count_Symbols_Ghost (Alphabet'Last);
+     cr : Index_Type renames Count_Symbols'Result;
+     begin
+       Count_Symbols'Result >= 0
+       and then Count_Symbols'Result <= 2 ** max_bits
+       and then cs = cr)
   is
     num_symbols : Count_Type := 0;
   begin
@@ -81,7 +100,7 @@ is
       if frequencies (a) > 0 then
         num_symbols := num_symbols + 1;
       end if;
-      pragma Loop_Invariant (num_symbols <= Alphabet'Pos (a));
+      pragma Loop_Invariant (num_symbols = Count_Symbols_Ghost (a));
     end loop;
     --  Check special cases and error conditions.
     if num_symbols > 2 ** max_bits then
@@ -94,7 +113,7 @@ is
 
   subtype Leaves_Index_Type_Invalid is Index_Type range 0 .. num_symbols;
   subtype Leaves_Index_Type is Leaves_Index_Type_Invalid range 0 .. Leaves_Index_Type_Invalid'Last - 1;
-  leaves : Leaf_array (Leaves_Index_Type);
+  leaves : Leaf_array (Leaves_Index_Type) with Relaxed_Initialization;
 
   --  Nodes forming chains.
   type Node is record
@@ -184,7 +203,8 @@ is
   --  is no more needed to recursively call self.
 
   procedure Boundary_PM (index : List_Index_Type; final : Boolean)
-    with Subprogram_Variant => (Decreases => index)
+    with Subprogram_Variant => (Decreases => index),
+         Pre => leaves'Initialized
   is
     newchain  : Index_Type;
     oldchain  : Index_Type;
@@ -221,7 +241,7 @@ is
 
   --  Initializes each list with as lookahead chains the two leaves with lowest weights.
 
-  procedure Init_Lists with Pre => num_symbols >= 2 is
+  procedure Init_Lists with Pre => num_symbols >= 2 and then leaves'Initialized is
     node0 : Index_Type;
     node1 : Index_Type;
   begin
@@ -236,7 +256,7 @@ is
   --  last chain of the last list contains the amount of active leaves in each list.
   --  chain: Chain to extract the bit length from (last chain from last list).
 
-  procedure Extract_Bit_Lengths (chain : Index_Type) with Pre => num_symbols >= 2 is
+  procedure Extract_Bit_Lengths (chain : Index_Type) with Pre => num_symbols >= 2 and then leaves'Initialized is
     node_idx : Index_Type := chain;
   begin
     while node_idx /= null_index loop
@@ -302,17 +322,26 @@ is
 begin
   bit_lengths := (others => 0);
   --  Count used symbols and place them in the leaves.
-
- for a in Alphabet loop
-    if frequencies (a) > 0 then
-      leaves (num_symbols) := (frequencies (a), a);
-      num_symbols := num_symbols + 1;
-    end if;
-  end loop;
-
   if num_symbols = 0 then
     return;  --  No symbols at all. OK.
   end if;
+
+  declare
+    count : Index_Type := 0;
+  begin
+    for a in Alphabet loop
+      if frequencies (a) > 0 then
+        count := count + 1;
+        Lemma_Count_Order(a, Alphabet'last);
+        leaves (count - 1) := (frequencies (a), a);
+      end if;
+      pragma Loop_Invariant (count = Count_Symbols_Ghost (a)
+                             and then (for all k in 0 .. count - 1 => leaves (k)'Initialized)
+                             and then count in 0 .. num_symbols
+                           );      
+    end loop;
+  end;
+
   if num_symbols = 1 then
     bit_lengths (leaves (0).symbol) := 1;
     return;  --  Only one symbol, give it bit length 1, not 0. OK.

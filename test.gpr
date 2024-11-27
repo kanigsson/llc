@@ -2,5 +2,6 @@ project Test is
   for Object_Dir use "obj";
    package Compiler is
       for Local_Configuration_Pragmas use "spark.adc";
+			for Switches ("Ada") use ("-gnat2022");
    end Compiler;
 end Test;
