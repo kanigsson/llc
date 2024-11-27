@@ -43,6 +43,10 @@
 --    - all structures are allocated on stack
 --    - sub-programs are nested, then unneeded parameters are removed
 
+--  Annotations and modifications for the purpose of SPARK analysis by Johannes Kanig 
+--  TODO list some main differences here
+
+
 procedure LLC
   (frequencies : in     Count_Array;
    bit_lengths :    out Length_Array)
@@ -213,11 +217,6 @@ is
       node_idx := pool (node_idx).tail;
     end loop;
   end Extract_Bit_Lengths;
-
-  function "<"(a, b : Leaf_Node) return Boolean is
-  begin
-    return a.weight < b.weight;
-  end "<";
 
   procedure Quick_sort (a : in out Leaf_array)
     with Pre => 0 <= A'Length and then A'Length <= Index_Type'Last
