@@ -79,7 +79,7 @@ is
   lists : array (List_Index_Type) of Index_pair;
 
 
-  num_symbols : Count_Type := 0;  --  Amount of symbols with frequency > 0.
+  num_symbols : Leaves_Index_Type := 0;  --  Amount of symbols with frequency > 0.
   num_Boundary_PM_runs : Count_Type;
 
   too_many_symbols_for_length_limit : exception;
@@ -155,7 +155,7 @@ is
   is
     newchain  : Index_Type;
     oldchain  : Index_Type;
-    lastcount : constant Count_Type := pool (lists (index)(1)).count;  --  Count of last chain of list.
+    lastcount : constant Leaves_Index_Type := pool (lists (index)(1)).count;  --  Count of last chain of list.
     sum : Count_Type;
   begin
     if index = 0 and lastcount >= num_symbols then

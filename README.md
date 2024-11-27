@@ -8,3 +8,4 @@
 - rte of quicksort
 - add subtype with invalid value in addition to `index_type`, for `get_free_node`
 - separate variants for get_free_node to avoid initialization problem
+- correct subtypes for numsymbols and lastcount
