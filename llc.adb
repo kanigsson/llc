@@ -267,56 +267,87 @@ is
     end loop;
   end Extract_Bit_Lengths;
 
-  procedure Quick_sort (a : in out Leaf_array)
-    with Pre => 0 <= A'Length and then A'Length <= Index_Type'Last
-  is
-    n : constant Index_Type := a'Length;
-    i, j : Index_Type;
-    t : Leaf_Node;
-    middle : constant Index_Type := n / 2;
-  begin
-    if n < 2 then
-      return;
-    end if;
-    declare
-      p : constant Leaf_Node := a (a'first + middle);
-    begin
-      i := 0;
-      j := n - 1;
-      loop
-        pragma Loop_Invariant
-          (i in 0 .. n - 1
-           and then j in 0 .. n - 1
-           and then (for all k in 0 .. i - 1 => a (a'first + k).weight <= p.weight)
-           and then (for all k in j + 1 .. n - 1 => p.weight <= a (a'first + k).weight)
-           and then (for some k in 0 .. n - 1 => p.weight = a (a'first + k).weight));
+	function Is_Sorted (A : Leaf_array; X, Y : Count_Type'Base) return Boolean
+		with Pre => (if Y >= X then X in A'Range and then Y in A'Range);
 
-        while i < n - 1 and then  a (a'first + i).weight < p.weight loop
-          pragma Loop_Invariant
-            (i in 0 .. n - 1
-             and then (for all k in 0 .. i => a (a'first + k).weight <= p.weight)
-            );
-          i := i + 1;
-        end loop;
-        while j > 0 and then p.weight < a (a'First + j).weight loop
-          pragma Loop_Invariant
-            (j in 0 .. n - 1
-             and then (for all k in j .. n - 1 => p.weight <= a (a'first + k).weight)
-            );
-          j := j - 1;
-        end loop;
-        exit when i >= j;
-        t := a (i + a'First);
-        a (i + a'First) := a (j + a'First);
-        a (j + a'First) := t;
-        if i < n - 1 and j > 0 then
-          i := i + 1;
-          j := j - 1;
-        end if;
-      end loop;
-      Quick_sort (a (a'First .. a'First + i - 1));
-      Quick_sort (a (a'First + i .. a'Last));
-    end;
+	function Is_Sorted (A : Leaf_array; X, Y : Count_Type'Base) return Boolean is
+		(If Y <= X then True else 
+			(for all I in X .. Y - 1 =>
+				(for all K in I + 1 .. Y => A (I).weight <= A (K).weight)));
+
+  procedure Quick_sort (a : in out Leaf_array)
+    with Pre => A'Length <= Index_Type'Last,
+		     Post => Is_Sorted (A, A'First, A'Last);
+
+  procedure Quick_sort (a : in out Leaf_array)
+  is
+		procedure Qsort (a : in out Leaf_array; X, Y : Count_Type'Base)
+			with Pre => X <= Y and then  X in A'Range and then Y in A'Range and then Y - X < Index_Type'Last,
+			     Post => Is_Sorted (A, X, Y) and then
+			             (for all I in a'range =>
+										(if (X > Y or I < X or I > Y) then A'Old (I) = A (I))),
+			     Subprogram_Variant => (Decreases => Y - X);
+
+		procedure Qsort (a : in out Leaf_array; X, Y : Count_Type'Base) is
+			n : constant Index_Type := Y - X + 1;
+			i, j : Index_Type;
+			t : Leaf_Node;
+			middle : constant Index_Type := n / 2;
+		begin
+			if n < 2 then
+				return;
+			end if;
+			declare
+				p : constant Leaf_Node := a (x + middle);
+			begin
+				i := 0;
+				j := n - 1;
+				loop
+					pragma Loop_Invariant
+						(i in 0 .. n - 1
+						 and then j in 0 .. n - 1
+						 and then (for all k in 0 .. i - 1 => a (x + k).weight <= p.weight)
+						 and then (for all k in j + 1 .. n - 1 => p.weight <= a (x + k).weight)
+						 and then (for some k in 0 .. n - 1 => p.weight = a (x + k).weight));
+
+					while i < n - 1 and then  a (x + i).weight < p.weight loop
+						pragma Loop_Invariant
+							(i in 0 .. n - 1
+							 and then (for all k in 0 .. i => a (x + k).weight <= p.weight)
+							);
+						i := i + 1;
+					end loop;
+					while j > 0 and then p.weight < a (x + j).weight loop
+						pragma Loop_Invariant
+							(j in 0 .. n - 1
+							 and then (for all k in j .. n - 1 => p.weight <= a (x + k).weight)
+							);
+						j := j - 1;
+					end loop;
+					exit when i >= j;
+					t := a (i + x);
+					a (i + x) := a (j + x);
+					a (j + x) := t;
+					if i < n - 1 and j > 0 then
+						i := i + 1;
+						j := j - 1;
+					end if;
+				end loop;
+				if I > 1 then
+					Qsort (a, x, x + i - 1);
+				end if;
+				pragma Assert (Is_Sorted (A, x, x + I - 1));
+				if Y - X > i + 1 then
+					Qsort (a,  x + i + 1,  y);
+				end if;
+				pragma Assert (Is_Sorted (A, x, x + I - 1));
+				pragma Assert (Is_Sorted (a,  x + i + 1,  y));
+			end;
+		end Qsort;
+	begin
+		if A'Length > 1 then
+			Qsort (A, A'First, A'Last);
+		end if;
   end Quick_sort;
 
 begin
