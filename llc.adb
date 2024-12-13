@@ -50,13 +50,13 @@ is
   subtype Index_Type_Invalid is Count_Type range 0 .. Count_Type (2 * max_bits * (max_bits + 1));
   subtype Index_Type is Index_Type_Invalid range 0 .. Index_Type_Invalid'Last - 1;
 
-  null_index : constant Index_Type := Index_Type'Last;
+  null_index : constant Index_Type_Invalid := Index_Type'Last;
 
   --  Nodes forming chains.
   type Node is record
     weight : Count_Type;
     count  : Count_Type;                --  Number of leaves before this chain.
-    tail   : Index_Type := null_index;  --  Previous node(s) of this chain, or null_index if none.
+    tail   : Index_Type_Invalid := null_index;  --  Previous node(s) of this chain, or null_index if none.
     in_use : Boolean    := False;       --  Tracking for garbage collection.
   end record;
 

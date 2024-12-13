@@ -1,0 +1,101 @@
+# The Pareto Principle or the Power of Range Types
+
+The Pareto Principle is well-known - it's the idea that a large part of a
+desired result can be achieved using only a fraction of the effort that would
+be needed to achieve the full goal. In this blog post, we will see this
+principle in action.
+
+The full goal is to prove that a certain piece of code doesn't contain any
+run-time errors. We will show that it is very easy to achieve 80 or 90% of that
+goal. Ada range types will play a major role in this effort.
+
+The chosen example is the limited-length encoding algorithm from zip-ada.
+
+Link: https://github.com/zertovitch/zip-ada/blob/master/zip_lib/huffman-encoding-length_limited_coding.adb
+
+ I made a copy of this code in my own repository: https://github.com/kanigsson/llc/tree/blogpost-1
+
+Given that we only care about absence of runtime errors, we will not need to
+dive deeply into what the algorithm does or how it works.
+
+## Making the code SPARK-compatible
+
+To be able to run SPARK on the code, I had to do a single adjustment. The
+`Get_Free_Node` function allocates a node in a pre-allocated pool, updating
+some global variables. In SPARK, functions that have side effects need to be
+annotated as such, and can't be used in certain places, such as object declarations. The following diff is enough:
+```
+diff --git a/llc.adb b/llc.adb
+index 425809e..65e3698 100644
+--- a/llc.adb
++++ b/llc.adb
+@@ -94,7 +94,7 @@ is
+   --  Finds a free location in the memory pool. Performs garbage collection if needed.
+   --  If use_lists = True, used to mark in-use nodes during garbage collection.
+ 
+-  function Get_Free_Node (use_lists : Boolean) return Index_Type is
++  function Get_Free_Node (use_lists : Boolean) return Index_Type with Side_Effects is
+     node_idx : Index_Type;
+   begin
+     loop
+@@ -165,9 +165,11 @@ is
+   --  Initializes each list with as lookahead chains the two leaves with lowest weights.
+ 
+   procedure Init_Lists is
+-    node0 : constant Index_Type := Get_Free_Node (use_lists => False);
+-    node1 : constant Index_Type := Get_Free_Node (use_lists => False);
++    node0 : Index_Type;
++    node1 : Index_Type;
+   begin
++    node0 := Get_Free_Node (use_lists => False);
++    node1 := Get_Free_Node (use_lists => False);
+     Init_Node (leaves (0).weight, 1, null_index, node0);
+     Init_Node (leaves (1).weight, 2, null_index, node1);
+     lists := (others => (node0, node1));
+```
+
+After doing that, SPARK reports 40 unproved checks, many of them index checks.
+
+
+## Introducing the first range type
+
+The original code defines pool as follows:
+
+```
+subtype Index_Type is Count_Type;
+pool : array (0 .. Index_Type (2 * max_bits * (max_bits + 1) - 1)) of Node;
+```
+
+Any objects used to access the pool array are generally declared as being of type `Index_Type`. Given the Ada language capabilities, there is a much better solution, by defining a more specific Index type just for the range of the pool array:
+```
+-  subtype Index_Type is Count_Type;
+-  pool : array (0 .. Index_Type (2 * max_bits * (max_bits + 1) - 1)) of Node;
++  subtype Index_Type is Count_Type range 0 .. Count_Type (2 * max_bits * (max_bits + 1) - 1);
++  pool : array (Index_Type) of Node;
+```
+
+Now, every expression of type `Index_Type` is automatically a valid index into
+the array. This simple change gets rid of 10 checks, and we are now down to 30 checks.
+
+## Separating invalid from valid indices
+
+The code contains a declaration like this:
+
+```
+  null_index : constant Index_Type := Index_Type'Last;
+```
+
+
+
+Unfortunately, the Pareto principle also has a downside. It means that once all
+the easy things have been done, the most difficult parts remain. In our
+example, it means a lot of effort is required to reach the full goal of freedom
+of runtime errors. The limited-length encoding uses a very simple memory
+allocator. Absence of runtime errors includes initialization, so the proof
+would require making sure the allocator works correctly. Another area are some
+of the computations in the algorithm, where user data is added together. The
+user input will need to be restricted to avoid overflows on these additions,
+and the information about the bounds needs to be carried across the algorithm.
+
+As a final note, this blog post only covers absence of run-time errors. A proof
+of correctness of the encoding would be even more difficult.
