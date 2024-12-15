@@ -282,10 +282,13 @@ is
   procedure Quick_sort (a : in out Leaf_array)
   is
 		procedure Qsort (a : in out Leaf_array; X, Y : Count_Type'Base)
-			with Pre => X <= Y and then  X in A'Range and then Y in A'Range and then Y - X < Index_Type'Last,
-			     Post => Is_Sorted (A, X, Y) and then
-			             (for all I in a'range =>
-										(if (X > Y or I < X or I > Y) then A'Old (I) = A (I))),
+			with Pre => X <= Y and then X in A'Range and then Y in A'Range and then Y - X < Index_Type'Last,
+			     Post => (for all I in a'range =>
+										(if (X > Y or I < X or I > Y) then A'Old (I) = A (I)))
+									 and then
+									 (for all I in X .. Y =>
+										(for some K in X .. Y => A (I) = A'Old (K)))
+									 and then Is_Sorted (A, X, Y),
 			     Subprogram_Variant => (Decreases => Y - X);
 
 		procedure Qsort (a : in out Leaf_array; X, Y : Count_Type'Base) is
@@ -308,7 +311,11 @@ is
 						 and then j in 0 .. n - 1
 						 and then (for all k in 0 .. i - 1 => a (x + k).weight <= p.weight)
 						 and then (for all k in j + 1 .. n - 1 => p.weight <= a (x + k).weight)
-						 and then (for some k in 0 .. n - 1 => p.weight = a (x + k).weight));
+						 and then (for some k in 0 .. n - 1 => p.weight = a (x + k).weight)
+						 and then (for all Z in a'range =>
+												(if (X > Y or Z < X or Z > Y) then A'Loop_Entry (Z) = A (Z)))
+					   and then (for all Z in X .. Y =>
+										(for some K in X .. Y => A (Z) = A'Loop_Entry (K))));
 
 					while i < n - 1 and then  a (x + i).weight < p.weight loop
 						pragma Loop_Invariant
